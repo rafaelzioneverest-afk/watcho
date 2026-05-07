@@ -384,7 +384,7 @@ async function handleStream(route, sources, env) {
         const payload = await fetchJson(url, env);
         const streams = Array.isArray(payload.streams) ? payload.streams : [];
         return streams.map((stream) =>
-          sanitizeStream(stream, sources.brandPatterns, getPublicSourceName(index))
+          sanitizeStream(stream, sources.brandPatterns, getPrivateSourceId(index))
         );
       } catch {
         return [];
@@ -392,7 +392,7 @@ async function handleStream(route, sources, env) {
     });
 
   const results = await Promise.all(tasks);
-  const streams = sortStreamsByQuality(dedupeStreams(results.flat()));
+  const streams = sortStreamsByQuality(results.flat());
   return jsonResponse({ streams });
 }
 
@@ -437,40 +437,39 @@ function sanitizeMeta(meta, brandPatterns) {
   return next;
 }
 
-function getPublicSourceName(index) {
-  return `${BRAND} ${index + 1}`;
+function getPrivateSourceId(index) {
+  return `source-${index + 1}`;
 }
 
-function sanitizeStream(stream, brandPatterns, publicSourceName = BRAND) {
+function sanitizeStream(stream, brandPatterns, privateSourceId = "") {
   const next = { ...stream };
-  const fallbackTitle = [stream.name, stream.title].filter(Boolean).join("\n");
   const peerCount = extractPeerCount(stream);
 
   Object.defineProperty(next, SOURCE_ID, {
-    value: publicSourceName,
+    value: privateSourceId,
     enumerable: false
   });
 
-  next.name = publicSourceName;
-  next.title = sanitizeText(stream.title || fallbackTitle || BRAND, brandPatterns);
+  delete next.name;
+
+  next.title = sanitizeText(stream.title || "", brandPatterns, "");
   next.title = appendPeerInfo(next.title, peerCount);
 
-  if (!next.title || next.title === BRAND) {
-    next.title = BRAND;
-    next.title = appendPeerInfo(next.title, peerCount);
+  if (next.title === BRAND) {
+    next.title = "";
   }
 
   if (typeof stream.description === "string") {
-    next.description = sanitizeText(stream.description, brandPatterns);
+    next.description = sanitizeText(stream.description, brandPatterns, "");
   }
 
   if (stream.behaviorHints && typeof stream.behaviorHints === "object") {
     next.behaviorHints = { ...stream.behaviorHints };
     for (const [key, value] of Object.entries(next.behaviorHints)) {
       if (shouldBrandBehaviorHintKey(key)) {
-        next.behaviorHints[key] = publicSourceName;
+        delete next.behaviorHints[key];
       } else if (typeof value === "string") {
-        next.behaviorHints[key] = sanitizeText(value, brandPatterns);
+        next.behaviorHints[key] = sanitizeText(value, brandPatterns, "");
       }
     }
   }
@@ -588,19 +587,19 @@ function titleHasPeerLabel(title) {
   return /(?:^|\n)\s*Peers:\s*[0-9]/i.test(title);
 }
 
-function sanitizeText(value, brandPatterns) {
+function sanitizeText(value, brandPatterns, replacement = BRAND) {
   if (typeof value !== "string") {
     return value;
   }
 
   let next = value;
   for (const pattern of brandPatterns) {
-    next = next.replace(pattern, BRAND);
+    next = next.replace(pattern, replacement);
   }
 
   return next
-    .replace(/(\u2699\uFE0F?\s*)[^\n]+/gu, `$1${BRAND}`)
-    .replace(/(\u{1F4E1}\s*)[^\n]+/gu, `$1${BRAND}`)
+    .replace(/(\u2699\uFE0F?\s*)[^\n]+/gu, replacement ? `$1${replacement}` : "")
+    .replace(/(\u{1F4E1}\s*)[^\n]+/gu, replacement ? `$1${replacement}` : "")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

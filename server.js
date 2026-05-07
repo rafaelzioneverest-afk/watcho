@@ -220,14 +220,14 @@ async function handleStream(req, res, route) {
       try {
         const payload = await fetchJson(url);
         const streams = Array.isArray(payload.streams) ? payload.streams : [];
-        return streams.map((stream) => sanitizeStream(stream, getPublicSourceName(index)));
+        return streams.map((stream) => sanitizeStream(stream, getPrivateSourceId(index)));
       } catch {
         return [];
       }
     });
 
   const results = await Promise.all(tasks);
-  const streams = sortStreamsByQuality(dedupeStreams(results.flat()));
+  const streams = sortStreamsByQuality(results.flat());
   sendJson(res, 200, { streams });
 }
 
@@ -272,40 +272,39 @@ function sanitizeMeta(meta) {
   return next;
 }
 
-function getPublicSourceName(index) {
-  return `${BRAND} ${index + 1}`;
+function getPrivateSourceId(index) {
+  return `source-${index + 1}`;
 }
 
-function sanitizeStream(stream, publicSourceName = BRAND) {
+function sanitizeStream(stream, privateSourceId = "") {
   const next = { ...stream };
-  const fallbackTitle = [stream.name, stream.title].filter(Boolean).join("\n");
   const peerCount = extractPeerCount(stream);
 
   Object.defineProperty(next, SOURCE_ID, {
-    value: publicSourceName,
+    value: privateSourceId,
     enumerable: false
   });
 
-  next.name = publicSourceName;
-  next.title = sanitizeText(stream.title || fallbackTitle || BRAND);
+  delete next.name;
+
+  next.title = sanitizeText(stream.title || "", "");
   next.title = appendPeerInfo(next.title, peerCount);
 
-  if (!next.title || next.title === BRAND) {
-    next.title = BRAND;
-    next.title = appendPeerInfo(next.title, peerCount);
+  if (next.title === BRAND) {
+    next.title = "";
   }
 
   if (typeof stream.description === "string") {
-    next.description = sanitizeText(stream.description);
+    next.description = sanitizeText(stream.description, "");
   }
 
   if (stream.behaviorHints && typeof stream.behaviorHints === "object") {
     next.behaviorHints = { ...stream.behaviorHints };
     for (const [key, value] of Object.entries(next.behaviorHints)) {
       if (shouldBrandBehaviorHintKey(key)) {
-        next.behaviorHints[key] = publicSourceName;
+        delete next.behaviorHints[key];
       } else if (typeof value === "string") {
-        next.behaviorHints[key] = sanitizeText(value);
+        next.behaviorHints[key] = sanitizeText(value, "");
       }
     }
   }
@@ -423,19 +422,19 @@ function titleHasPeerLabel(title) {
   return /(?:^|\n)\s*Peers:\s*[0-9]/i.test(title);
 }
 
-function sanitizeText(value) {
+function sanitizeText(value, replacement = BRAND) {
   if (typeof value !== "string") {
     return value;
   }
 
   let next = value;
   for (const pattern of BRAND_PATTERNS) {
-    next = next.replace(pattern, BRAND);
+    next = next.replace(pattern, replacement);
   }
 
   return next
-    .replace(/(\u2699\uFE0F?\s*)[^\n]+/gu, `$1${BRAND}`)
-    .replace(/(\u{1F4E1}\s*)[^\n]+/gu, `$1${BRAND}`)
+    .replace(/(\u2699\uFE0F?\s*)[^\n]+/gu, replacement ? `$1${replacement}` : "")
+    .replace(/(\u{1F4E1}\s*)[^\n]+/gu, replacement ? `$1${replacement}` : "")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
