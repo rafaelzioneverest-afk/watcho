@@ -1,0 +1,22 @@
+{
+  "catalogUpstreams": [
+    {
+      "key": "c1",
+      "baseUrl": "https://example.com",
+      "catalogs": [
+        { "id": "example", "type": "movie", "name": "Example" }
+      ],
+      "hasMeta": true
+    }
+  ],
+  "streamUpstreams": [
+    {
+      "key": "s1",
+      "baseUrl": "https://example.com",
+      "types": ["movie", "series", "anime"]
+    }
+  ],
+  "brandPatterns": [
+    "\\bexample\\b"
+  ]
+}

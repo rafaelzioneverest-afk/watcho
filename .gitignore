@@ -1,0 +1,9 @@
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+sources.private.json
+sources.private.*.json
+*.secret.json
+secrets/
+.wrangler/
