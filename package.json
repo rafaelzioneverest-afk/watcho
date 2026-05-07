@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check sources.js"
+    "check": "node --check server.js && node --check sources.js && node --check src/worker.mjs",
+    "deploy": "wrangler deploy"
   },
   "engines": {
     "node": ">=18"
