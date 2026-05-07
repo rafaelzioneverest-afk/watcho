@@ -1,4 +1,4 @@
-name = "watcho-stremio-addon"
+name = "watcho"
 main = "worker.mjs"
 compatibility_date = "2025-04-01"
 
