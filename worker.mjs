@@ -1,5 +1,6 @@
 const BRAND = "Watcho";
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 12000;
+const SOURCE_ID = Symbol("watchoSourceId");
 
 export default {
   async fetch(request, env) {
@@ -377,12 +378,14 @@ async function handleMeta(route, sources, env) {
 async function handleStream(route, sources, env) {
   const tasks = sources.streamUpstreams
     .filter((upstream) => Array.isArray(upstream.types) && upstream.types.includes(route.type))
-    .map(async (upstream) => {
+    .map(async (upstream, index) => {
       const url = buildUpstreamUrl(upstream.baseUrl, "stream", route.type, route.id, route.extra);
       try {
         const payload = await fetchJson(url, env);
         const streams = Array.isArray(payload.streams) ? payload.streams : [];
-        return streams.map((stream) => sanitizeStream(stream, sources.brandPatterns));
+        return streams.map((stream) =>
+          sanitizeStream(stream, sources.brandPatterns, getPublicSourceName(index))
+        );
       } catch {
         return [];
       }
@@ -434,12 +437,21 @@ function sanitizeMeta(meta, brandPatterns) {
   return next;
 }
 
-function sanitizeStream(stream, brandPatterns) {
+function getPublicSourceName(index) {
+  return `${BRAND} ${index + 1}`;
+}
+
+function sanitizeStream(stream, brandPatterns, publicSourceName = BRAND) {
   const next = { ...stream };
   const fallbackTitle = [stream.name, stream.title].filter(Boolean).join("\n");
   const peerCount = extractPeerCount(stream);
 
-  next.name = BRAND;
+  Object.defineProperty(next, SOURCE_ID, {
+    value: publicSourceName,
+    enumerable: false
+  });
+
+  next.name = publicSourceName;
   next.title = sanitizeText(stream.title || fallbackTitle || BRAND, brandPatterns);
   next.title = appendPeerInfo(next.title, peerCount);
 
@@ -456,7 +468,7 @@ function sanitizeStream(stream, brandPatterns) {
     next.behaviorHints = { ...stream.behaviorHints };
     for (const [key, value] of Object.entries(next.behaviorHints)) {
       if (shouldBrandBehaviorHintKey(key)) {
-        next.behaviorHints[key] = BRAND;
+        next.behaviorHints[key] = publicSourceName;
       } else if (typeof value === "string") {
         next.behaviorHints[key] = sanitizeText(value, brandPatterns);
       }
@@ -604,7 +616,8 @@ function dedupeStreams(streams) {
       stream.fileIdx ?? "",
       stream.url || "",
       stream.externalUrl || "",
-      stream.title || ""
+      stream.title || "",
+      stream[SOURCE_ID] || ""
     ].join("|");
 
     if (seen.has(key)) {
